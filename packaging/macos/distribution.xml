@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>Moveable</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <allowed-os-versions>
+        <os-version min="13.0"/>
+    </allowed-os-versions>
+    <choices-outline>
+        <line choice="default">
+            <line choice="local.moveable.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="local.moveable.pkg" visible="false">
+        <pkg-ref id="local.moveable.pkg"/>
+    </choice>
+    <pkg-ref id="local.moveable.pkg" version="__VERSION__" onConclusion="none">Moveable-component.pkg</pkg-ref>
+</installer-gui-script>

@@ -1,12 +1,14 @@
 #!/bin/zsh
-# Moveable.app 빌드 스크립트
+# Moveable (macOS) 빌드 스크립트
 #   ./build.sh            빌드 후 ./Moveable.app 을 교체하고 실행
-#   ./build.sh --release  dist/Moveable.zip 만 만든다 (실행 중인 앱은 건드리지 않음)
+#   ./build.sh --release  dist/Moveable.pkg (설치 프로그램) + dist/Moveable.zip 만 만든다
+#                         (실행 중인 앱은 건드리지 않음)
 set -euo pipefail
 cd "$(dirname "$0")"
 
 RELEASE=0
 [[ "${1:-}" == "--release" ]] && RELEASE=1
+VERSION="$(tr -d '[:space:]' < VERSION)"
 
 # Xcode 라이선스 동의 없이도 빌드되도록 Command Line Tools 를 우선 사용
 if [[ -z "${DEVELOPER_DIR:-}" && -x /Library/Developer/CommandLineTools/usr/bin/swiftc ]]; then
@@ -19,6 +21,7 @@ TMP="$WORK/$APP"
 rm -rf "$WORK"
 mkdir -p "$TMP/Contents/MacOS"
 cp Info.plist "$TMP/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "$VERSION" "$TMP/Contents/Info.plist"
 
 # Apple Silicon + Intel 유니버설 바이너리
 for arch in arm64 x86_64; do
@@ -33,10 +36,35 @@ codesign --force --sign - --identifier local.moveable.app "$TMP"
 
 if (( RELEASE )); then
   mkdir -p dist
-  rm -f dist/Moveable.zip
+  rm -f dist/Moveable.zip dist/Moveable.pkg
+
+  # 1) zip — 압축 풀어서 바로 쓰는 버전
   ditto -c -k --norsrc --noextattr --noqtn --keepParent "$TMP" dist/Moveable.zip
+
+  # 2) pkg — /Applications 에 설치하고 바로 실행하는 설치 프로그램
+  PKGROOT="$WORK/pkgroot"
+  mkdir -p "$PKGROOT"
+  ditto --norsrc --noextattr "$TMP" "$PKGROOT/$APP"
+  pkgbuild --analyze --root "$PKGROOT" "$WORK/component.plist" >/dev/null
+  # 다른 위치에 같은 앱이 있어도 그쪽을 덮어쓰지 않고 항상 /Applications 에 설치
+  plutil -replace 0.BundleIsRelocatable -bool NO "$WORK/component.plist"
+  pkgbuild --root "$PKGROOT" \
+    --component-plist "$WORK/component.plist" \
+    --identifier local.moveable.pkg \
+    --version "$VERSION" \
+    --install-location /Applications \
+    --scripts packaging/macos/scripts \
+    "$WORK/Moveable-component.pkg" >/dev/null
+  sed "s/__VERSION__/$VERSION/" packaging/macos/distribution.xml > "$WORK/distribution.xml"
+  productbuild --distribution "$WORK/distribution.xml" \
+    --package-path "$WORK" \
+    --resources packaging/macos/resources \
+    dist/Moveable.pkg >/dev/null
+
   rm -rf "$WORK"
-  echo "릴리스 파일: $(pwd)/dist/Moveable.zip"
+  echo "릴리스 파일 (v$VERSION):"
+  echo "  $(pwd)/dist/Moveable.pkg"
+  echo "  $(pwd)/dist/Moveable.zip"
   exit 0
 fi
 
@@ -46,5 +74,5 @@ rm -rf "$APP"
 mv "$TMP" "$APP"
 rm -rf "$WORK"
 open "$APP"
-echo "빌드 완료 및 실행: $(pwd)/$APP"
+echo "빌드 완료 및 실행 (v$VERSION): $(pwd)/$APP"
 echo "※ 다시 빌드하면 시스템 설정 > 손쉬운 사용 에서 Moveable 권한을 다시 켜야 합니다."

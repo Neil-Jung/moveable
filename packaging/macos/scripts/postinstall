@@ -1,0 +1,13 @@
+#!/bin/sh
+# 설치가 끝나면 로그인한 사용자로 Moveable 을 (다시) 실행한다.
+user=$(stat -f%Su /dev/console)
+[ -n "$user" ] && [ "$user" != "root" ] || exit 0
+uid=$(id -u "$user")
+
+# 업데이트라면 이전 버전을 끄고, 이전 버전에 대한 손쉬운 사용 권한 기록을 지운다
+# (서명이 바뀌면 예전 기록은 켜져 있어도 동작하지 않기 때문)
+pkill -x Moveable 2>/dev/null || true
+launchctl asuser "$uid" sudo -u "$user" tccutil reset Accessibility local.moveable.app >/dev/null 2>&1 || true
+
+launchctl asuser "$uid" sudo -u "$user" open /Applications/Moveable.app || true
+exit 0

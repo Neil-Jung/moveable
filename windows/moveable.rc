@@ -1,11 +1,16 @@
 #include <winres.h>
 #include "resource.h"
 
+#ifndef MOVEABLE_VERSION_STR
+#define MOVEABLE_VERSION_STR "0.0.0"
+#define MOVEABLE_VERSION_COMMA 0,0,0,0
+#endif
+
 IDI_APP ICON "moveable.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,2,0,0
- PRODUCTVERSION 1,2,0,0
+ FILEVERSION MOVEABLE_VERSION_COMMA
+ PRODUCTVERSION MOVEABLE_VERSION_COMMA
  FILEOS VOS_NT_WINDOWS32
  FILETYPE VFT_APP
 BEGIN
@@ -15,11 +20,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Moveable"
             VALUE "FileDescription", "Moveable - move and resize the focused window from the keyboard"
-            VALUE "FileVersion", "1.2.0"
+            VALUE "FileVersion", MOVEABLE_VERSION_STR
             VALUE "InternalName", "Moveable"
             VALUE "OriginalFilename", "Moveable.exe"
             VALUE "ProductName", "Moveable"
-            VALUE "ProductVersion", "1.2.0"
+            VALUE "ProductVersion", MOVEABLE_VERSION_STR
             VALUE "LegalCopyright", "MIT License"
         END
     END
