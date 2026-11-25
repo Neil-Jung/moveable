@@ -191,9 +191,9 @@ DWORD WINAPI MoverThread(LPVOID) {
                 w = reqW;
                 hgt = reqH;
                 // 앱이 최소/최대 크기로 막았으면 실제 크기를 따라가서, 반대로 누를 때 바로 반응하게 한다
-                RECT now;
-                if (GetWindowRect(hwnd, &now)) {
-                    const double aw = now.right - now.left, ah = now.bottom - now.top;
+                RECT actual;
+                if (GetWindowRect(hwnd, &actual)) {
+                    const double aw = actual.right - actual.left, ah = actual.bottom - actual.top;
                     if (std::abs(aw - reqW) > 24) w = aw;
                     if (std::abs(ah - reqH) > 24) hgt = ah;
                 }
