@@ -46,7 +46,7 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .25 0 0 0 0 .22 0 0 0 0 .15 0 0 0 .7 -.335'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     font: 16px/1.65 var(--sans);
     word-break: keep-all;          /* 한국어를 어절 단위로 줄바꿈 */
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     -webkit-font-smoothing: antialiased;
   }
   a { color: var(--accent); font-weight: 600; text-decoration: none; }
@@ -70,7 +70,8 @@
   .hero { text-align: center; padding: 40px 0 28px; }
   .hero h1 { margin: 18px 0 6px; font-family: var(--serif); font-size: clamp(34px, 6vw, 48px); line-height: 1.15; letter-spacing: -.02em; }
   .hero .lead { margin: 0 auto; max-width: 520px; color: var(--ink-3); font-size: clamp(16px, 2.4vw, 18px); }
-  .version { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 13px; color: var(--ink-2); }
+  .version { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+  @media (max-width: 400px) { .version .notes, .version .notes-sep { display: none; } .btn { font-size: 15px; } }
   .version .dot { width: 7px; height: 7px; border-radius: 50%; background: #3c8d5a; }
   .version b { font-weight: 700; color: var(--ink); }
   .version .sep { color: var(--line); }
@@ -232,8 +233,8 @@
         <span><b id="ver-tag">최신 버전</b></span>
         <span class="sep" id="ver-sep" hidden>·</span>
         <span id="ver-date"></span>
-        <span class="sep">·</span>
-        <span>릴리스 노트</span>
+        <span class="sep notes-sep">·</span>
+        <span class="notes">릴리스 노트</span>
       </a>
     </div>
 
