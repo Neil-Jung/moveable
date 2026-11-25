@@ -1,4 +1,6 @@
-// Moveable — Ctrl + Option + Shift + 방향키로 현재 선택된(포커스된) 창을 부드럽게 이동시키는 메뉴바 앱.
+// Moveable — 현재 선택된(포커스된) 창을 키보드로 부드럽게 이동·크기 조절하는 메뉴바 앱.
+//   ⌃ Control + ⌥ Option + ⇧ Shift + 방향키 : 창 이동
+//   ⌥ Option + ⇧ Shift + 방향키            : 창 크기 조절 (왼쪽 위 꼭지점 고정)
 
 import AppKit
 import ApplicationServices
@@ -20,6 +22,7 @@ func statusLog(_ msg: String) {
 
 enum Prefs {
     static let speedKey = "speedPixelsPerSecond"
+    static let resizeKey = "resizeEnabled"
     static let speedOptions: [(String, Double)] = [
         ("느리게 (400 px/s)", 400),
         ("보통 (800 px/s)", 800),
@@ -33,9 +36,14 @@ enum Prefs {
         }
         set { UserDefaults.standard.set(newValue, forKey: speedKey) }
     }
+    /// ⌥⇧ + 방향키 크기 조절 사용 여부 (기본 켜짐)
+    static var resizeEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: resizeKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: resizeKey) }
+    }
 }
 
-// MARK: - 키 코드
+// MARK: - 키 코드 / 모드
 
 enum ArrowKey: Int64 {
     case left = 123, right = 124, down = 125, up = 126
@@ -50,10 +58,21 @@ enum ArrowKey: Int64 {
     }
 }
 
-let requiredFlags: CGEventFlags = [.maskControl, .maskAlternate, .maskShift]
+enum Mode {
+    case move     // ⌃⌥⇧
+    case resize   // ⌥⇧
+
+    var flags: CGEventFlags {
+        switch self {
+        case .move: return [.maskControl, .maskAlternate, .maskShift]
+        case .resize: return [.maskAlternate, .maskShift]
+        }
+    }
+}
+
 let relevantFlags: CGEventFlags = [.maskControl, .maskAlternate, .maskShift, .maskCommand]
 
-// MARK: - 창 이동 엔진
+// MARK: - 창 이동 / 크기 조절 엔진
 
 final class WindowMover {
     private var held = Set<ArrowKey>()
@@ -62,18 +81,25 @@ final class WindowMover {
     private var appElement: AXUIElement?
     private var restoreEnhancedUI = false
     private var position = CGPoint.zero
+    private var size = CGSize.zero
     private var lastTick: CFTimeInterval = 0
+    private(set) var mode: Mode = .move
 
-    var isMoving: Bool { timer != nil }
+    var isActive: Bool { timer != nil }
 
-    func press(_ key: ArrowKey) {
+    func press(_ key: ArrowKey, mode newMode: Mode) {
+        if isActive && newMode != mode { releaseAll() }  // 도중에 모드가 바뀌면 새로 시작
+        mode = newMode
         held.insert(key)
         if timer == nil { start() }
     }
 
-    func release(_ key: ArrowKey) {
-        held.remove(key)
+    /// 이 키가 눌려 있던 키였으면 true
+    @discardableResult
+    func release(_ key: ArrowKey) -> Bool {
+        guard held.remove(key) != nil else { return false }
         if held.isEmpty { stop() }
+        return true
     }
 
     func releaseAll() {
@@ -83,13 +109,15 @@ final class WindowMover {
 
     private func start() {
         guard let (app, win) = Self.focusedWindow(),
-              let pos = Self.position(of: win) else {
+              let pos = Self.point(of: win, kAXPositionAttribute),
+              let sz = Self.size(of: win) else {
             held.removeAll()
             return
         }
         appElement = app
         window = win
         position = pos
+        size = sz
 
         // Chrome/Electron 등은 AXEnhancedUserInterface 가 켜져 있으면 창 이동이 애니메이션되어 버벅인다.
         // 이동하는 동안만 잠시 꺼둔다.
@@ -128,13 +156,31 @@ final class WindowMover {
         let len = (dx * dx + dy * dy).squareRoot()
         guard len > 0 else { return }       // 좌+우 동시 등 상쇄
         let step = CGFloat(Prefs.speed * dt) / len
-        position.x += dx * step
-        position.y += dy * step
 
-        var p = CGPoint(x: position.x.rounded(), y: position.y.rounded())
-        if let v = AXValueCreate(.cgPoint, &p) {
-            if AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, v) != .success {
-                releaseAll()
+        switch mode {
+        case .move:
+            position.x += dx * step
+            position.y += dy * step
+            var p = CGPoint(x: position.x.rounded(), y: position.y.rounded())
+            guard let v = AXValueCreate(.cgPoint, &p),
+                  AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, v) == .success else {
+                return releaseAll()
+            }
+
+        case .resize:
+            // 왼쪽 위 꼭지점은 그대로, 오른쪽(→)·아래(↓)로 커지고 왼쪽(←)·위(↑)로 작아진다
+            let requested = CGSize(width: max(1, size.width + dx * step),
+                                   height: max(1, size.height + dy * step))
+            var s = CGSize(width: requested.width.rounded(), height: requested.height.rounded())
+            guard let v = AXValueCreate(.cgSize, &s),
+                  AXUIElementSetAttributeValue(win, kAXSizeAttribute as CFString, v) == .success else {
+                return releaseAll()
+            }
+            size = requested
+            // 앱이 최소/최대 크기로 막았으면 실제 크기를 따라가서, 반대로 누를 때 바로 반응하게 한다
+            if let actual = Self.size(of: win) {
+                if abs(actual.width - requested.width) > 24 { size.width = actual.width }
+                if abs(actual.height - requested.height) > 24 { size.height = actual.height }
             }
         }
     }
@@ -154,13 +200,22 @@ final class WindowMover {
         return nil
     }
 
-    private static func position(of win: AXUIElement) -> CGPoint? {
+    private static func point(of win: AXUIElement, _ attr: String) -> CGPoint? {
         var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(win, kAXPositionAttribute as CFString, &value) == .success,
+        guard AXUIElementCopyAttributeValue(win, attr as CFString, &value) == .success,
               let v = value, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
         var p = CGPoint.zero
         AXValueGetValue(v as! AXValue, .cgPoint, &p)
         return p
+    }
+
+    private static func size(of win: AXUIElement) -> CGSize? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(win, kAXSizeAttribute as CFString, &value) == .success,
+              let v = value, CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
+        var s = CGSize.zero
+        AXValueGetValue(v as! AXValue, .cgSize, &s)
+        return s
     }
 }
 
@@ -207,8 +262,8 @@ final class HotkeyTap {
             return Unmanaged.passUnretained(event)
 
         case .flagsChanged:
-            // 수정키 중 하나라도 떼면 즉시 멈춤
-            if mover.isMoving && !event.flags.contains(requiredFlags) {
+            // 현재 모드의 수정키 중 하나라도 떼면 즉시 멈춤
+            if mover.isActive && !event.flags.contains(mover.mode.flags) {
                 mover.releaseAll()
             }
             return Unmanaged.passUnretained(event)
@@ -219,17 +274,20 @@ final class HotkeyTap {
             let flags = event.flags.intersection(relevantFlags)
 
             if type == .keyDown {
-                guard flags == requiredFlags else { return Unmanaged.passUnretained(event) }
+                let mode: Mode
+                if flags == Mode.move.flags {
+                    mode = .move
+                } else if flags == Mode.resize.flags && Prefs.resizeEnabled {
+                    mode = .resize
+                } else {
+                    return Unmanaged.passUnretained(event)
+                }
                 if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-                    mover.press(key)
+                    mover.press(key, mode: mode)
                 }
                 return nil  // 단축키는 앱으로 전달하지 않음
             } else {
-                if mover.isMoving {
-                    mover.release(key)
-                    return nil
-                }
-                return Unmanaged.passUnretained(event)
+                return mover.release(key) ? nil : Unmanaged.passUnretained(event)
             }
 
         default:
@@ -247,6 +305,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusLine: NSMenuItem!
     private var permissionTimer: Timer?
 
+    private let loginTag = 100
+    private let resizeTag = 101
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -263,12 +324,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         statusLine.isEnabled = false
         menu.addItem(statusLine)
-        let hint = NSMenuItem(title: "⌃⌥⇧ + 방향키: 선택된 창 이동", action: nil, keyEquivalent: "")
-        hint.isEnabled = false
-        menu.addItem(hint)
+        for text in ["⌃⌥⇧ + 방향키: 선택된 창 이동",
+                     "⌥⇧ + 방향키: 창 크기 조절 (왼쪽 위 고정)"] {
+            let hint = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+            hint.isEnabled = false
+            menu.addItem(hint)
+        }
         menu.addItem(.separator())
 
-        let speedHeader = NSMenuItem(title: "이동 속도", action: nil, keyEquivalent: "")
+        let speedHeader = NSMenuItem(title: "속도", action: nil, keyEquivalent: "")
         speedHeader.isEnabled = false
         menu.addItem(speedHeader)
         for (title, value) in Prefs.speedOptions {
@@ -280,9 +344,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(.separator())
 
+        let resize = NSMenuItem(title: "크기 조절 단축키 사용 (⌥⇧ + 방향키)",
+                                action: #selector(toggleResize(_:)), keyEquivalent: "")
+        resize.target = self
+        resize.tag = resizeTag
+        menu.addItem(resize)
+
         let login = NSMenuItem(title: "로그인 시 자동 실행", action: #selector(toggleLogin(_:)), keyEquivalent: "")
         login.target = self
-        login.tag = 100
+        login.tag = loginTag
         menu.addItem(login)
 
         let ax = NSMenuItem(title: "손쉬운 사용 설정 열기…", action: #selector(openAccessibility), keyEquivalent: "")
@@ -305,8 +375,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let v = item.representedObject as? Double {
                 item.state = (v == Prefs.speed) ? .on : .off
             }
-            if item.tag == 100 {
+            if item.tag == loginTag {
                 item.state = SMAppService.mainApp.status == .enabled ? .on : .off
+            }
+            if item.tag == resizeTag {
+                item.state = Prefs.resizeEnabled ? .on : .off
             }
         }
     }
@@ -332,6 +405,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func selectSpeed(_ sender: NSMenuItem) {
         if let v = sender.representedObject as? Double { Prefs.speed = v }
+        refreshMenu()
+    }
+
+    @objc private func toggleResize(_ sender: NSMenuItem) {
+        Prefs.resizeEnabled.toggle()
         refreshMenu()
     }
 

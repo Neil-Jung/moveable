@@ -1,4 +1,6 @@
-// Moveable for Windows — Ctrl + Alt + Shift + 방향키로 현재 선택된(포그라운드) 창을 부드럽게 이동시키는 트레이 앱.
+// Moveable for Windows — 현재 선택된(포그라운드) 창을 키보드로 부드럽게 이동·크기 조절하는 트레이 앱.
+//   Ctrl + Alt + Shift + 방향키 : 창 이동
+//   Alt + Shift + 방향키        : 창 크기 조절 (왼쪽 위 꼭지점 고정)
 //
 // 구조
 //   - 메인 스레드: 트레이 아이콘, 메뉴, 저수준 키보드 훅(WH_KEYBOARD_LL)
@@ -32,6 +34,7 @@ constexpr UINT TRAY_ID = 1;
 constexpr UINT IDM_SPEED_BASE = 100;
 constexpr UINT IDM_STARTUP = 200;
 constexpr UINT IDM_QUIT = 201;
+constexpr UINT IDM_RESIZE = 202;
 
 // 아무 키에도 할당되지 않은 가상 키. Alt 를 뗄 때 메뉴 막대가 활성화되는 것을 막는 데 쓴다.
 constexpr WORD VK_MASK_KEY = 0xE8;
@@ -49,8 +52,11 @@ constexpr SpeedOption kSpeeds[] = {
 };
 
 enum Dir : int { kLeft = 1, kRight = 2, kUp = 4, kDown = 8 };
+enum Mode : int { kModeNone = 0, kModeMove = 1, kModeResize = 2 };
 
 std::atomic<int> g_held{0};       // 눌려 있는 방향 비트마스크
+std::atomic<int> g_mode{kModeMove};
+std::atomic<bool> g_resizeEnabled{true};
 std::atomic<int> g_speed{800};    // px/s
 std::atomic<bool> g_quit{false};
 HANDLE g_wake = nullptr;          // 이동 스레드 깨우기 (auto-reset)
@@ -74,6 +80,17 @@ int LoadSpeed() {
 void SaveSpeed(int speed) {
     DWORD value = static_cast<DWORD>(speed);
     RegSetKeyValueW(HKEY_CURRENT_USER, kRegKey, L"Speed", REG_DWORD, &value, sizeof(value));
+}
+
+bool LoadResizeEnabled() {
+    DWORD value = 1, size = sizeof(value);
+    RegGetValueW(HKEY_CURRENT_USER, kRegKey, L"ResizeEnabled", RRF_RT_REG_DWORD, nullptr, &value, &size);
+    return value != 0;
+}
+
+void SaveResizeEnabled(bool enabled) {
+    DWORD value = enabled ? 1 : 0;
+    RegSetKeyValueW(HKEY_CURRENT_USER, kRegKey, L"ResizeEnabled", REG_DWORD, &value, sizeof(value));
 }
 
 bool IsStartupEnabled() {
@@ -119,6 +136,7 @@ DWORD WINAPI MoverThread(LPVOID) {
         if (g_quit.load()) break;
         if (g_held.load() == 0) continue;
 
+        const int mode = g_mode.load();
         HWND hwnd = TargetWindow();
         RECT rc;
         if (!hwnd || !GetWindowRect(hwnd, &rc)) {
@@ -126,12 +144,14 @@ DWORD WINAPI MoverThread(LPVOID) {
             continue;
         }
         double x = rc.left, y = rc.top;
+        double w = rc.right - rc.left, hgt = rc.bottom - rc.top;
 
         LARGE_INTEGER last;
         QueryPerformanceCounter(&last);
 
         while (!g_quit.load()) {
             if (g_held.load() == 0) break;
+            if (g_mode.load() != mode) break;  // 도중에 모드가 바뀌면 새 세션으로
 
             // 다음 화면 갱신까지 대기 → 모니터 주사율에 맞춰 부드럽게 이동
             if (FAILED(DwmFlush())) Sleep(8);
@@ -150,15 +170,34 @@ DWORD WINAPI MoverThread(LPVOID) {
             if (len == 0.0) continue;  // 좌+우 동시 등 상쇄
 
             const double step = g_speed.load() * dt / len;
-            x += dx * step;
-            y += dy * step;
 
             if (!IsWindow(hwnd)) {
                 g_held.store(0);
                 break;
             }
-            SetWindowPos(hwnd, nullptr, static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y)), 0, 0,
-                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+
+            if (mode == kModeMove) {
+                x += dx * step;
+                y += dy * step;
+                SetWindowPos(hwnd, nullptr, static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y)), 0, 0,
+                             SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+            } else {
+                // 왼쪽 위 꼭지점은 그대로, 오른쪽(→)·아래(↓)로 커지고 왼쪽(←)·위(↑)로 작아진다
+                const double reqW = std::max(1.0, w + dx * step);
+                const double reqH = std::max(1.0, hgt + dy * step);
+                SetWindowPos(hwnd, nullptr, 0, 0, static_cast<int>(std::lround(reqW)),
+                             static_cast<int>(std::lround(reqH)),
+                             SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+                w = reqW;
+                hgt = reqH;
+                // 앱이 최소/최대 크기로 막았으면 실제 크기를 따라가서, 반대로 누를 때 바로 반응하게 한다
+                RECT now;
+                if (GetWindowRect(hwnd, &now)) {
+                    const double aw = now.right - now.left, ah = now.bottom - now.top;
+                    if (std::abs(aw - reqW) > 24) w = aw;
+                    if (std::abs(ah - reqH) > 24) hgt = ah;
+                }
+            }
         }
     }
     return 0;
@@ -178,8 +217,11 @@ int DirFromVk(DWORD vk) {
 
 bool IsDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
 
-bool ComboHeld() {
-    return IsDown(VK_CONTROL) && IsDown(VK_MENU) && IsDown(VK_SHIFT) && !IsDown(VK_LWIN) && !IsDown(VK_RWIN);
+// 지금 눌린 수정키 조합이 어떤 모드인지
+int ComboMode() {
+    if (!IsDown(VK_MENU) || !IsDown(VK_SHIFT) || IsDown(VK_LWIN) || IsDown(VK_RWIN)) return kModeNone;
+    if (IsDown(VK_CONTROL)) return kModeMove;                    // Ctrl + Alt + Shift
+    return g_resizeEnabled.load() ? kModeResize : kModeNone;     // Alt + Shift
 }
 
 bool IsModifier(DWORD vk) {
@@ -201,10 +243,16 @@ LRESULT CALLBACK KeyboardProc(int code, WPARAM wParam, LPARAM lParam) {
             const int dir = DirFromVk(k->vkCode);
 
             if (dir != 0) {
-                if (down && ComboHeld()) {
+                const int mode = down ? ComboMode() : kModeNone;
+                if (mode != kModeNone) {
+                    if (g_held.load() != 0 && g_mode.load() != mode) {
+                        g_held.store(0);  // 도중에 모드가 바뀌면 새로 시작
+                    }
+                    g_mode.store(mode);
                     const int prev = g_held.fetch_or(dir);
                     if (prev == 0) {
                         SetEvent(g_wake);
+                        // Alt 를 뗄 때 메뉴 막대가 열리거나 Alt+Shift 로 입력 언어가 바뀌지 않도록
                         PostMessageW(g_wnd, WM_SEND_MASK_KEY, 0, 0);
                     }
                     return 1;  // 단축키는 앱으로 전달하지 않음 (자동 반복 포함)
@@ -240,11 +288,11 @@ void AddTrayIcon(bool showBalloon) {
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAY;
     nid.hIcon = g_icon;
-    wcscpy_s(nid.szTip, L"Moveable — Ctrl+Alt+Shift+방향키로 창 이동");
+    wcscpy_s(nid.szTip, L"Moveable — 창 이동·크기 조절");
     if (showBalloon) {
         nid.uFlags |= NIF_INFO;
         wcscpy_s(nid.szInfoTitle, L"Moveable 실행 중");
-        wcscpy_s(nid.szInfo, L"Ctrl + Alt + Shift + 방향키로 선택된 창을 옮길 수 있어요.");
+        wcscpy_s(nid.szInfo, L"Ctrl+Alt+Shift+방향키: 창 이동\nAlt+Shift+방향키: 창 크기 조절");
         nid.dwInfoFlags = NIIF_NONE;
     }
     Shell_NotifyIconW(NIM_ADD, &nid);
@@ -261,13 +309,16 @@ void RemoveTrayIcon() {
 void ShowTrayMenu() {
     HMENU menu = CreatePopupMenu();
     AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, L"Ctrl + Alt + Shift + 방향키: 선택된 창 이동");
+    AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, L"Alt + Shift + 방향키: 창 크기 조절 (왼쪽 위 고정)");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, L"이동 속도");
+    AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, L"속도");
     for (UINT i = 0; i < ARRAYSIZE(kSpeeds); ++i) {
         UINT flags = MF_STRING | (kSpeeds[i].pxPerSec == g_speed.load() ? MF_CHECKED : MF_UNCHECKED);
         AppendMenuW(menu, flags, IDM_SPEED_BASE + i, kSpeeds[i].label);
     }
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING | (g_resizeEnabled.load() ? MF_CHECKED : MF_UNCHECKED), IDM_RESIZE,
+                L"크기 조절 단축키 사용 (Alt + Shift + 방향키)");
     AppendMenuW(menu, MF_STRING | (IsStartupEnabled() ? MF_CHECKED : MF_UNCHECKED), IDM_STARTUP,
                 L"Windows 시작 시 자동 실행");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -300,6 +351,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (id >= IDM_SPEED_BASE && id < IDM_SPEED_BASE + ARRAYSIZE(kSpeeds)) {
                 g_speed.store(kSpeeds[id - IDM_SPEED_BASE].pxPerSec);
                 SaveSpeed(g_speed.load());
+            } else if (id == IDM_RESIZE) {
+                g_resizeEnabled.store(!g_resizeEnabled.load());
+                SaveResizeEnabled(g_resizeEnabled.load());
             } else if (id == IDM_STARTUP) {
                 SetStartupEnabled(!IsStartupEnabled());
             } else if (id == IDM_QUIT) {
@@ -331,6 +385,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
     g_inst = instance;
     g_speed.store(LoadSpeed());
+    g_resizeEnabled.store(LoadResizeEnabled());
     g_icon = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
                                            GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
     if (!g_icon) g_icon = LoadIconW(nullptr, IDI_APPLICATION);
