@@ -40,6 +40,7 @@ jobs:
         run: |
           $v = (Get-Content VERSION -Raw).Trim()
           New-Item -ItemType Directory -Force dist | Out-Null
+          Write-Host "Korean.isl available: $(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\Languages\Korean.isl")"
           Compress-Archive -Path build/Release/Moveable.exe -DestinationPath dist/Moveable-Windows-x64.zip -Force
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$v" windows\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }

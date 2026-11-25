@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moveable · 키보드로 창 이동과 크기 조절</title>
+<meta name="description" content="단축키를 누르고 있는 동안 선택된 창이 부드럽게 미끄러지고, 크기가 바뀝니다. macOS · Windows 무료 오픈소스.">
+<meta property="og:title" content="Moveable · 키보드로 창 이동과 크기 조절">
+<meta property="og:description" content="단축키를 누르고 있는 동안 선택된 창이 부드럽게 미끄러지고, 크기가 바뀝니다. macOS · Windows 무료 오픈소스.">
+<meta property="og:type" content="website">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231b2233'/%3E%3Cg fill='%23fdfcf8'%3E%3Cpath d='M32 9l8 10h-5v10h10v-5l10 8-10 8v-5H35v10h5l-8 10-8-10h5V35H19v5L9 32l10-8v5h10V19h-5z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* ── SMART LMS 라이트 모드 토큰 ───────────────────────────── */
+  :root {
+    --paper: #e7e3d6;
+    --surface: #fdfcf8;
+    --field: #fffefb;
+    --line: #d6d0bc;
+    --line-soft: #e6e1d1;
+    --ink: #1b2233;
+    --ink-2: #323b4d;
+    --ink-3: #4b5567;
+    --muted: #767f8f;
+    --accent: #2c3e9e;
+    --cream: #fdfcf8;
+    --radius: 8px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 0 rgba(27, 34, 51, .04), 0 10px 26px rgba(27, 34, 51, .07);
+    --shadow-tile: 0 6px 20px rgba(27, 34, 51, .14);
+    --serif: "Gowun Batang", "Noto Serif KR", AppleMyungjo, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background-color: var(--paper);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .25 0 0 0 0 .22 0 0 0 0 .15 0 0 0 .7 -.335'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    font: 16px/1.65 var(--sans);
+    word-break: keep-all;          /* 한국어를 어절 단위로 줄바꿈 */
+    overflow-wrap: anywhere;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+
+  /* ── 상단 ─────────────────────────────────────────────────── */
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-family: var(--serif); font-weight: 700; font-size: 18px; letter-spacing: -.02em; }
+  .brand:hover { text-decoration: none; }
+  .brand .tile { width: 30px; height: 30px; border-radius: 6px; box-shadow: none; }
+  .top-links { display: flex; gap: 18px; font-size: 14px; }
+  .top-links a { color: var(--ink-2); font-weight: 500; }
+
+  .tile { display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: var(--radius); background: var(--ink); color: var(--cream); box-shadow: var(--shadow-tile); }
+  .tile svg { width: 58%; height: 58%; }
+
+  /* ── 히어로 ───────────────────────────────────────────────── */
+  .hero { text-align: center; padding: 40px 0 28px; }
+  .hero h1 { margin: 18px 0 6px; font-family: var(--serif); font-size: clamp(34px, 6vw, 48px); line-height: 1.15; letter-spacing: -.02em; }
+  .hero .lead { margin: 0 auto; max-width: 520px; color: var(--ink-3); font-size: clamp(16px, 2.4vw, 18px); }
+  .version { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 13px; color: var(--ink-2); }
+  .version .dot { width: 7px; height: 7px; border-radius: 50%; background: #3c8d5a; }
+  .version b { font-weight: 700; color: var(--ink); }
+  .version .sep { color: var(--line); }
+
+  /* ── 카드 / 버튼 ──────────────────────────────────────────── */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+  .downloads { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 8px 0 0; }
+  .dl { position: relative; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+  .dl-head { display: flex; align-items: center; gap: 12px; }
+  .os-icon { width: 40px; height: 40px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--field); display: inline-flex; align-items: center; justify-content: center; color: var(--ink); flex: none; }
+  .os-icon svg { width: 22px; height: 22px; }
+  .dl h2 { margin: 0; font-family: var(--serif); font-size: 21px; letter-spacing: -.02em; }
+  .dl .req { margin: 0; font-size: 13px; color: var(--muted); }
+  .badge { position: absolute; top: 16px; right: 16px; padding: 2px 9px; border-radius: 999px; background: var(--ink); color: var(--cream); font-size: 12px; font-weight: 600; display: none; }
+  .dl.is-mine .badge { display: inline-block; }
+  .dl.is-mine { border-color: #b9b29a; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 18px; border-radius: var(--radius-sm); font: 600 16px/1 var(--sans); border: 1px solid var(--line); background: var(--field); color: var(--ink); transition: background-color .15s, box-shadow .15s, transform .05s; }
+  .btn:hover { text-decoration: none; background: #f6f3ea; }
+  .btn:active { transform: translateY(1px); }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+  .dl.is-mine .btn, .btn.primary { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+  .dl.is-mine .btn:hover, .btn.primary:hover { background: #2a3349; box-shadow: 0 4px 14px rgba(27, 34, 51, .18); }
+  .file { margin: -4px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+  .file code { font: 12px var(--mono); color: var(--ink-3); }
+  .alt { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--line-soft); font-size: 13px; color: var(--muted); }
+  .alt a { font-weight: 500; }
+
+  .mobile-note { display: none; margin: 16px 0 0; padding: 12px 16px; font-size: 14px; color: var(--ink-2); text-align: center; }
+  .is-mobile .mobile-note { display: block; }
+
+  /* ── 섹션 ─────────────────────────────────────────────────── */
+  section { padding: 56px 0 0; }
+  .eyebrow { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+  section h2.title { margin: 0 0 20px; font-family: var(--serif); font-size: clamp(24px, 4vw, 30px); letter-spacing: -.02em; line-height: 1.25; }
+
+  /* 데모 */
+  .demo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .desk { position: relative; height: 300px; overflow: hidden; padding: 0; background: #f4f1e7; }
+  .desk::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(27, 34, 51, .07) 1px, transparent 1px); background-size: 18px 18px; }
+  .win { position: absolute; left: 28px; top: 28px; width: 190px; height: 124px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); box-shadow: 0 10px 26px rgba(27, 34, 51, .12); overflow: hidden; animation: win 9s cubic-bezier(.4, 0, .2, 1) infinite; }
+  .win .bar { height: 22px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border-bottom: 1px solid var(--line-soft); background: #f8f6ef; }
+  .win .bar i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .win .body { padding: 10px; display: grid; gap: 6px; }
+  .win .body span { height: 7px; border-radius: 4px; background: #ebe7da; }
+  .win .body span:nth-child(2) { width: 70%; }
+  .win .body span:nth-child(3) { width: 45%; }
+  .corner { position: absolute; left: 22px; top: 22px; width: 12px; height: 12px; border-left: 2px solid var(--accent); border-top: 2px solid var(--accent); opacity: 0; animation: corner 9s infinite; }
+  @keyframes win {
+    0%, 8%   { left: 28px;  top: 28px; width: 190px; height: 124px; }
+    38%, 44% { left: 46%;   top: 64px; width: 190px; height: 124px; }
+    72%, 80% { left: 46%;   top: 64px; width: 250px; height: 190px; }
+    100%     { left: 28px;  top: 28px; width: 190px; height: 124px; }
+  }
+  @keyframes corner {
+    0%, 44%  { opacity: 0; left: 22px; top: 22px; }
+    46%, 80% { opacity: 1; left: calc(46% - 6px); top: 58px; }
+    84%, 100% { opacity: 0; left: calc(46% - 6px); top: 58px; }
+  }
+  .keys { padding: 20px; display: flex; flex-direction: column; gap: 14px; justify-content: center; }
+  .krow { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--field); }
+  .krow .lbl { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .krow .seq { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .krow.r1 { animation: lit1 9s infinite; }
+  .krow.r2 { animation: lit2 9s infinite; }
+  @keyframes lit1 { 0%, 8% { border-color: var(--line-soft); } 10%, 36% { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27, 34, 51, .07); } 40%, 100% { border-color: var(--line-soft); box-shadow: none; } }
+  @keyframes lit2 { 0%, 44% { border-color: var(--line-soft); } 46%, 70% { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27, 34, 51, .07); } 74%, 100% { border-color: var(--line-soft); box-shadow: none; } }
+  kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; background: var(--surface); font: 600 13px/1 var(--sans); color: var(--ink); }
+  .plus { color: var(--muted); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) {
+    .win, .corner, .krow.r1, .krow.r2 { animation: none; }
+  }
+
+  /* 단축키 표 */
+  .table { overflow: hidden; }
+  .table table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .table th, .table td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  .table tr:last-child td { border-bottom: 0; }
+  .table th { font-size: 13px; color: var(--muted); font-weight: 600; background: #f8f6ef; }
+  .table td:first-child { font-weight: 600; white-space: nowrap; }
+  .table .seq { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+  .table .desc { color: var(--ink-3); font-size: 14px; }
+
+  /* 설치 방법 */
+  .tabs { display: inline-flex; padding: 4px; gap: 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-bottom: 14px; }
+  .tab { appearance: none; border: 0; background: none; padding: 8px 16px; border-radius: 6px; font: 600 14px var(--sans); color: var(--ink-3); cursor: pointer; }
+  .tab[aria-selected="true"] { background: var(--ink); color: var(--cream); }
+  .steps { margin: 0; padding: 24px 24px 24px 24px; list-style: none; counter-reset: s; display: grid; gap: 18px; }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 14px; }
+  .steps li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--field); display: inline-flex; align-items: center; justify-content: center; font: 700 14px var(--serif); color: var(--ink); }
+  .steps b { display: block; margin-bottom: 2px; }
+  .steps p { margin: 0; color: var(--ink-3); font-size: 15px; }
+  .steps code, .faq code { font: 13px var(--mono); background: #f2efe6; border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; word-break: break-all; }
+  [hidden] { display: none !important; }
+
+  /* FAQ */
+  .faq { display: grid; gap: 10px; }
+  .faq details { padding: 0; }
+  .faq summary { list-style: none; cursor: pointer; padding: 16px 20px; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; color: var(--muted); font-weight: 400; font-size: 20px; line-height: 1; }
+  .faq details[open] summary::after { content: "−"; }
+  .faq .a { padding: 0 20px 18px; color: var(--ink-3); font-size: 15px; }
+  .faq .a p { margin: 0 0 8px; }
+
+  /* 푸터 */
+  footer { margin-top: 64px; padding: 22px 0 32px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  footer a { font-weight: 500; color: var(--ink-3); }
+
+  @media (max-width: 720px) {
+    .downloads, .demo { grid-template-columns: 1fr; }
+    .desk { height: 240px; }
+    @keyframes win {
+      0%, 8%   { left: 16px; top: 18px; width: 130px; height: 88px; }
+      38%, 44% { left: calc(100% - 175px); top: 40px; width: 130px; height: 88px; }
+      72%, 80% { left: calc(100% - 175px); top: 40px; width: 160px; height: 130px; }
+      100%     { left: 16px; top: 18px; width: 130px; height: 88px; }
+    }
+    @keyframes corner {
+      0%, 44%  { opacity: 0; left: 10px; top: 12px; }
+      46%, 80% { opacity: 1; left: calc(100% - 181px); top: 34px; }
+      84%, 100% { opacity: 0; left: calc(100% - 181px); top: 34px; }
+    }
+    .table th:nth-child(3), .table td:nth-child(3) { display: none; }
+    .table th, .table td { padding: 12px 14px; }
+    .top-links a.hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-move" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l3.5 4.2h-2.3V10.8h4.6V8.5L22 12l-4.2 3.5v-2.3h-4.6v4.6h2.3L12 22l-3.5-4.2h2.3v-4.6H6.2v2.3L2 12l4.2-3.5v2.3h4.6V6.2H8.5z"/></symbol>
+  <symbol id="i-apple" viewBox="0 0 24 24"><path fill="currentColor" d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.1-1.2 2.9-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.4-1-2.4-3.9zM14 5.5c.7-.8 1.1-1.9 1-3-.9 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.8-1.3z"/></symbol>
+  <symbol id="i-windows" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5.1l7.4-1V11H3zm8.3-1.1L21 2.7V11h-9.7zM3 12h7.4v6.9L3 17.9zm8.3 0H21v9.3l-9.7-1.3z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./" aria-label="Moveable 홈">
+      <span class="tile"><svg><use href="#i-move"/></svg></span>
+      Moveable
+    </a>
+    <nav class="top-links">
+      <a href="#how" class="hide-sm">사용법</a>
+      <a href="#install" class="hide-sm">설치</a>
+      <a href="https://github.com/Neil-Jung/moveable">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <span class="tile"><svg><use href="#i-move"/></svg></span>
+      <h1>창을 키보드로 옮기세요</h1>
+      <p class="lead">단축키를 누르고 있는 동안 선택된 창이 부드럽게 미끄러지고, 크기가 바뀝니다. 마우스로 창을 하나하나 끌 필요가 없어요.</p>
+      <a class="version" id="version" href="https://github.com/Neil-Jung/moveable/releases/latest">
+        <span class="dot" aria-hidden="true"></span>
+        <span><b id="ver-tag">최신 버전</b></span>
+        <span class="sep" id="ver-sep" hidden>·</span>
+        <span id="ver-date"></span>
+        <span class="sep">·</span>
+        <span>릴리스 노트</span>
+      </a>
+    </div>
+
+    <div class="downloads">
+      <article class="card dl" id="dl-mac" data-os="mac">
+        <span class="badge">내 컴퓨터</span>
+        <div class="dl-head">
+          <span class="os-icon"><svg><use href="#i-apple"/></svg></span>
+          <div>
+            <h2>macOS</h2>
+            <p class="req">macOS 13 이상 · Apple Silicon · Intel</p>
+          </div>
+        </div>
+        <a class="btn" id="btn-mac" href="https://github.com/Neil-Jung/moveable/releases/latest/download/Moveable.pkg">
+          <svg><use href="#i-down"/></svg> macOS용 설치 프로그램
+        </a>
+        <p class="file"><code>Moveable.pkg</code> <span data-size="Moveable.pkg"></span></p>
+        <div class="alt">설치 없이 쓰려면 <a href="https://github.com/Neil-Jung/moveable/releases/latest/download/Moveable.zip">zip 받기</a><span data-size="Moveable.zip"></span></div>
+      </article>
+
+      <article class="card dl" id="dl-win" data-os="win">
+        <span class="badge">내 컴퓨터</span>
+        <div class="dl-head">
+          <span class="os-icon"><svg><use href="#i-windows"/></svg></span>
+          <div>
+            <h2>Windows</h2>
+            <p class="req">Windows 10 · 11 (64비트)</p>
+          </div>
+        </div>
+        <a class="btn" id="btn-win" href="https://github.com/Neil-Jung/moveable/releases/latest/download/Moveable-Setup.exe">
+          <svg><use href="#i-down"/></svg> Windows용 설치 프로그램
+        </a>
+        <p class="file"><code>Moveable-Setup.exe</code> <span data-size="Moveable-Setup.exe"></span></p>
+        <div class="alt">설치 없이 쓰려면 <a href="https://github.com/Neil-Jung/moveable/releases/latest/download/Moveable-Windows-x64.zip">zip 받기</a><span data-size="Moveable-Windows-x64.zip"></span></div>
+      </article>
+    </div>
+    <p class="card mobile-note">Moveable은 데스크톱용 앱이에요. Mac이나 Windows PC에서 이 페이지를 열어 내려받으세요.</p>
+
+    <section id="how">
+      <p class="eyebrow">사용법</p>
+      <h2 class="title">누르고 있는 동안, 일정한 속도로</h2>
+      <div class="demo">
+        <div class="card desk" aria-hidden="true">
+          <div class="corner"></div>
+          <div class="win">
+            <div class="bar"><i></i><i></i><i></i></div>
+            <div class="body"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+        <div class="card keys">
+          <div class="krow r1">
+            <span class="lbl">창 이동</span>
+            <span class="seq" data-keys="move"></span>
+          </div>
+          <div class="krow r2">
+            <span class="lbl">창 크기 조절 · 왼쪽 위 고정</span>
+            <span class="seq" data-keys="resize"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="eyebrow">단축키</p>
+      <h2 class="title">두 가지만 기억하세요</h2>
+      <div class="card table">
+        <table>
+          <thead><tr><th>동작</th><th>단축키</th><th>설명</th></tr></thead>
+          <tbody>
+            <tr><td>창 이동</td><td><span class="seq" data-keys="move-any"></span></td><td class="desc">누르고 있는 동안 그 방향으로 쭉 이동</td></tr>
+            <tr><td>크기 조절</td><td><span class="seq" data-keys="resize-any"></span></td><td class="desc">→ 넓게 · ← 좁게 · ↓ 길게 · ↑ 짧게</td></tr>
+            <tr><td>대각선</td><td><span class="seq"><kbd>↓</kbd><span class="plus">+</span><kbd>→</kbd></span></td><td class="desc">방향키 두 개를 같이 누르면 대각선으로</td></tr>
+            <tr><td>멈춤</td><td class="desc">아무 키나 떼기</td><td class="desc">방향키나 수정키 중 하나라도 떼면 즉시 정지</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="install">
+      <p class="eyebrow">설치</p>
+      <h2 class="title">1분이면 끝나요</h2>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-mac" aria-controls="steps-mac" aria-selected="true">macOS</button>
+        <button class="tab" role="tab" id="tab-win" aria-controls="steps-win" aria-selected="false">Windows</button>
+      </div>
+      <ol class="card steps" id="steps-mac" role="tabpanel" aria-labelledby="tab-mac">
+        <li><div><b><code>Moveable.pkg</code>를 엽니다</b><p>개발자 서명이 없는 무료 앱이라 처음엔 “확인할 수 없음” 안내가 뜰 수 있어요. 그럴 땐 <b style="display:inline">시스템 설정 → 개인정보 보호 및 보안</b> 아래쪽의 <b style="display:inline">그래도 열기</b>를 누르세요.</p></div></li>
+        <li><div><b>설치를 진행합니다</b><p>응용 프로그램 폴더에 설치되고, 끝나면 메뉴 막대에 Moveable 아이콘이 나타나요.</p></div></li>
+        <li><div><b>손쉬운 사용 권한을 켭니다</b><p><b style="display:inline">시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용</b>에서 Moveable을 켜면 바로 동작해요. 메뉴 막대 아이콘에 “● 동작 중”이 보이면 준비 완료.</p></div></li>
+      </ol>
+      <ol class="card steps" id="steps-win" role="tabpanel" aria-labelledby="tab-win" hidden>
+        <li><div><b><code>Moveable-Setup.exe</code>를 실행합니다</b><p>“Windows의 PC 보호” 창이 뜨면 <b style="display:inline">추가 정보 → 실행</b>을 누르세요. 코드 서명이 없는 무료 앱이라 나오는 안내예요.</p></div></li>
+        <li><div><b>설치를 진행합니다</b><p>관리자 권한 없이 내 계정에 설치돼요. “Windows 시작 시 자동 실행”은 원하면 체크하세요.</p></div></li>
+        <li><div><b>트레이 아이콘을 확인합니다</b><p>작업 표시줄 오른쪽(필요하면 <code>^</code> 펼치기)에 파란 화살표 아이콘이 보이면 바로 쓸 수 있어요. 따로 권한 설정은 필요 없어요.</p></div></li>
+      </ol>
+    </section>
+
+    <section>
+      <p class="eyebrow">자주 묻는 질문</p>
+      <h2 class="title">궁금한 점</h2>
+      <div class="faq">
+        <details class="card">
+          <summary>다른 앱의 단축키와 겹쳐요</summary>
+          <div class="a">
+            <p>Moveable이 켜져 있으면 위 단축키는 다른 앱에 전달되지 않아요. macOS의 <code>⌥⇧ + ←/→</code>(단어 단위 선택)나 VS Code의 <code>Alt+Shift+방향키</code>를 자주 쓴다면, 메뉴 막대 / 트레이 메뉴에서 <b>크기 조절 단축키 사용</b>을 끄세요. 창 이동은 계속 동작해요.</p>
+          </div>
+        </details>
+        <details class="card">
+          <summary>속도를 바꿀 수 있나요?</summary>
+          <div class="a"><p>메뉴 막대(macOS) 또는 트레이(Windows) 아이콘을 누르면 느리게 · 보통 · 빠르게 · 아주 빠르게 4단계 중에서 고를 수 있어요.</p></div>
+        </details>
+        <details class="card">
+          <summary>업데이트했더니 Mac에서 동작하지 않아요</summary>
+          <div class="a"><p>서명이 없는 앱이라 macOS는 새 버전을 다른 앱으로 인식해요. 손쉬운 사용 목록에서 Moveable을 한 번 다시 켜 주세요.</p></div>
+        </details>
+        <details class="card">
+          <summary>움직이지 않는 창이 있어요</summary>
+          <div class="a"><p>전체 화면 · 최대화된 창은 움직이지 않아요. Windows에서는 관리자 권한으로 실행된 창(작업 관리자 등)도 옮길 수 없는데, 이럴 땐 Moveable을 관리자 권한으로 실행하면 돼요.</p></div>
+        </details>
+        <details class="card">
+          <summary>지우려면 어떻게 하나요?</summary>
+          <div class="a"><p><b>macOS</b> — 메뉴 막대에서 Moveable을 종료하고 응용 프로그램 폴더의 Moveable을 휴지통으로 옮기세요.</p><p><b>Windows</b> — 설정 → 앱 → 설치된 앱에서 Moveable을 제거하세요. 자동 실행 설정도 함께 지워져요.</p></div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 Neil-Jung · <a href="https://github.com/Neil-Jung/moveable/blob/main/LICENSE">MIT License</a> · 무료 오픈소스</span>
+    <span><a href="https://github.com/Neil-Jung/moveable">소스 코드</a> · <a href="https://github.com/Neil-Jung/moveable/releases">모든 릴리스</a> · <a href="https://github.com/Neil-Jung/moveable/issues">문제 제보</a></span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const REPO = "Neil-Jung/moveable";
+
+  // ── 운영체제 감지 ──────────────────────────────────────────
+  const ua = navigator.userAgent;
+  const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+  // iPadOS 는 Mac 처럼 보이지만 터치 포인트가 있다
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const os = /Win/i.test(platform) || /Windows/i.test(ua) ? "win" : /Mac/i.test(platform) || /Mac OS X/i.test(ua) ? "mac" : null;
+
+  if (isMobile) document.documentElement.classList.add("is-mobile");
+  if (os && !isMobile) {
+    const mine = document.getElementById(os === "mac" ? "dl-mac" : "dl-win");
+    mine.classList.add("is-mine");
+    if (os === "win") mine.parentNode.insertBefore(mine, mine.parentNode.firstElementChild);
+  }
+
+  // ── 단축키 표시 (내 OS 기준, 모르면 Mac) ─────────────────────
+  const K = {
+    mac: { move: ["⌃ Control", "⌥ Option", "⇧ Shift"], resize: ["⌥ Option", "⇧ Shift"],
+           moveShort: ["⌃", "⌥", "⇧"], resizeShort: ["⌥", "⇧"] },
+    win: { move: ["Ctrl", "Alt", "Shift"], resize: ["Alt", "Shift"],
+           moveShort: ["Ctrl", "Alt", "Shift"], resizeShort: ["Alt", "Shift"] },
+  };
+  const keyset = K[os === "win" ? "win" : "mac"];
+  const kbd = (t) => { const k = document.createElement("kbd"); k.textContent = t; return k; };
+  const plus = () => { const s = document.createElement("span"); s.className = "plus"; s.textContent = "+"; return s; };
+  const fill = (el, mods, tail) => {
+    el.textContent = "";
+    mods.forEach((m, i) => { if (i) el.append(plus()); el.append(kbd(m)); });
+    el.append(plus());
+    tail.forEach((t) => el.append(kbd(t)));
+  };
+  document.querySelectorAll("[data-keys]").forEach((el) => {
+    const kind = el.dataset.keys;
+    const short = kind.endsWith("-any");  // 표에서는 기호만
+    const mods = kind.startsWith("move") ? (short ? keyset.moveShort : keyset.move) : (short ? keyset.resizeShort : keyset.resize);
+    const tail = kind.endsWith("-any") ? ["방향키"] : kind === "move" ? ["→"] : ["↓", "→"];
+    fill(el, mods, tail);
+  });
+
+  // ── 설치 방법 탭 ───────────────────────────────────────────
+  const tabs = { mac: document.getElementById("tab-mac"), win: document.getElementById("tab-win") };
+  const panels = { mac: document.getElementById("steps-mac"), win: document.getElementById("steps-win") };
+  const select = (k) => {
+    for (const key of ["mac", "win"]) {
+      tabs[key].setAttribute("aria-selected", String(key === k));
+      panels[key].hidden = key !== k;
+    }
+  };
+  tabs.mac.addEventListener("click", () => select("mac"));
+  tabs.win.addEventListener("click", () => select("win"));
+  if (os === "win") select("win");
+
+  // ── 최신 버전 정보 (GitHub API) ─────────────────────────────
+  const fmtSize = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+  fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((rel) => {
+      document.getElementById("ver-tag").textContent = rel.tag_name;
+      if (rel.published_at) {
+        const d = new Date(rel.published_at);
+        document.getElementById("ver-date").textContent =
+          `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. 출시`;
+        document.getElementById("ver-sep").hidden = false;
+      }
+      if (rel.html_url) document.getElementById("version").href = rel.html_url;
+      const assets = Object.fromEntries((rel.assets || []).map((a) => [a.name, a]));
+      document.querySelectorAll("[data-size]").forEach((el) => {
+        const a = assets[el.dataset.size];
+        if (a) el.textContent = ` · ${fmtSize(a.size)}`;
+      });
+      // 설치 프로그램이 아직 없는 릴리스라면 zip 으로 연결
+      if (!assets["Moveable.pkg"] && assets["Moveable.zip"]) document.getElementById("btn-mac").href = assets["Moveable.zip"].browser_download_url;
+      if (!assets["Moveable-Setup.exe"] && assets["Moveable-Windows-x64.zip"]) document.getElementById("btn-win").href = assets["Moveable-Windows-x64.zip"].browser_download_url;
+    })
+    .catch(() => { /* 네트워크 실패 시 기본 링크(최신 릴리스)와 "최신 버전" 문구 유지 */ });
+})();
+</script>
+</body>
+</html>

@@ -25,24 +25,35 @@
 
 ## 다운로드
 
-[Releases](../../releases/latest)에서 운영체제에 맞는 파일을 받으세요.
+### 👉 [neil-jung.github.io/moveable](https://neil-jung.github.io/moveable/)
 
-- macOS: `Moveable.zip`
-- Windows: `Moveable-Windows-x64.zip`
+랜딩 페이지에서 내 운영체제에 맞는 설치 프로그램을 바로 받을 수 있습니다. [Releases](../../releases/latest)에서 직접 받아도 됩니다.
+
+| | 설치 프로그램 (권장) | 설치 없이 쓰기 |
+|---|---|---|
+| macOS | `Moveable.pkg` | `Moveable.zip` |
+| Windows | `Moveable-Setup.exe` | `Moveable-Windows-x64.zip` |
 
 ---
 
 ## macOS
 
-### 설치
+### 설치 (설치 프로그램)
+
+1. `Moveable.pkg`를 엽니다. 개발자 서명이 없는 앱이라 "확인할 수 없음" 안내가 뜨면 **시스템 설정 → 개인정보 보호 및 보안** 아래쪽의 **그래도 열기**를 누르세요.
+2. 설치를 진행하면 `응용 프로그램` 폴더에 설치되고 바로 실행됩니다.
+3. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 **Moveable**을 켭니다. 1초 안에 자동으로 활성화됩니다.
+
+업데이트할 때도 같은 방법으로 설치하면 됩니다. 설치 프로그램이 이전 버전을 종료하고 예전 권한 기록을 정리하니, 손쉬운 사용에서 Moveable만 다시 켜 주세요.
+
+### 설치 (zip)
 
 1. `Moveable.zip`을 받아 압축을 풀고 `Moveable.app`을 `응용 프로그램` 폴더로 옮깁니다.
-2. 개발자 서명이 없는 앱이라 처음엔 macOS가 실행을 막습니다. 터미널에서 아래 명령으로 격리 속성을 지우거나,
+2. 실행이 막히면 터미널에서 아래 명령으로 격리 속성을 지우거나, Finder에서 앱을 **우클릭 → 열기**를 선택하세요.
    ```bash
    xattr -dr com.apple.quarantine /Applications/Moveable.app
    ```
-   Finder에서 앱을 **우클릭 → 열기**를 선택하세요. (최신 macOS에서는 *시스템 설정 → 개인정보 보호 및 보안*에서 "그래도 열기"를 눌러야 할 수 있습니다.)
-3. 실행 후 **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 **Moveable**을 켭니다. 1초 안에 자동으로 활성화됩니다.
+3. 실행 후 손쉬운 사용에서 **Moveable**을 켭니다.
 
 ### 직접 빌드
 
@@ -64,7 +75,7 @@ pkill -f MacOS/Moveable; ditto Moveable.app /Applications/Moveable.app && open /
 
 옮긴 뒤 단축키가 안 먹으면 손쉬운 사용 목록에서 Moveable을 껐다 켜세요.
 
-배포용 zip은 `./build.sh --release`로 `dist/Moveable.zip`에 만들어집니다.
+배포용 파일은 `./build.sh --release`로 `dist/Moveable.pkg`(설치 프로그램)와 `dist/Moveable.zip`에 만들어집니다. 버전은 저장소 루트의 `VERSION` 파일에서 읽습니다.
 
 ### 요구 사항
 
@@ -86,11 +97,17 @@ pkill -f MacOS/Moveable; ditto Moveable.app /Applications/Moveable.app && open /
 
 ## Windows
 
-### 설치
+### 설치 (설치 프로그램)
 
-1. `Moveable-Windows-x64.zip`을 받아 압축을 풀고 `Moveable.exe`를 원하는 폴더(예: `C:\Users\<이름>\Apps\Moveable`)에 둡니다.
-2. `Moveable.exe`를 실행합니다. 코드 서명이 없어서 **"Windows의 PC 보호"** 창이 뜰 수 있습니다. **추가 정보 → 실행**을 누르세요.
+1. `Moveable-Setup.exe`를 실행합니다. 코드 서명이 없어서 **"Windows의 PC 보호"** 창이 뜰 수 있습니다. **추가 정보 → 실행**을 누르세요.
+2. 관리자 권한 없이 내 계정(`%LOCALAPPDATA%\Programs\Moveable`)에 설치됩니다. 시작 메뉴 바로 가기가 생기고, **Windows 시작 시 자동 실행**을 고를 수 있습니다.
 3. 작업 표시줄 오른쪽 트레이(필요하면 `^` 펼치기)에 파란 화살표 아이콘이 생기면 준비 완료입니다. 별도 권한 설정은 필요 없습니다.
+
+지우려면 **설정 → 앱 → 설치된 앱**에서 Moveable을 제거하세요. 자동 실행과 설정도 함께 지워집니다.
+
+### 설치 (zip)
+
+`Moveable-Windows-x64.zip`을 풀어 `Moveable.exe`를 원하는 폴더에 두고 실행하면 됩니다.
 
 트레이 아이콘을 클릭하면 속도 변경, **크기 조절 단축키 사용**, **Windows 시작 시 자동 실행**, 종료 메뉴가 나옵니다.
 
@@ -105,7 +122,7 @@ cmake -S windows -B build -A x64
 cmake --build build --config Release
 ```
 
-결과물은 `build\Release\Moveable.exe`입니다. 런타임을 정적으로 링크해 exe 하나만 있으면 실행됩니다.
+결과물은 `build\Release\Moveable.exe`입니다. 런타임을 정적으로 링크해 exe 하나만 있으면 실행됩니다. 설치 프로그램은 [Inno Setup 6](https://jrsoftware.org/isinfo.php)으로 `iscc /DAppVersion=1.3.0 windows\installer.iss`를 실행하면 `dist\Moveable-Setup.exe`로 만들어집니다.
 
 ### 요구 사항
 
