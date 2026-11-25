@@ -39,7 +39,17 @@ cd moveable
 ./build.sh
 ```
 
-`Moveable.app`이 만들어지고 바로 실행됩니다. 배포용 zip은 `./build.sh --release`로 `dist/Moveable.zip`에 만들어집니다.
+`Moveable.app`이 만들어지고 바로 실행됩니다. 직접 빌드한 앱에는 격리 속성이 없으므로 위의 `xattr` 명령은 필요 없습니다. 실행 후 손쉬운 사용에서 Moveable을 켜세요.
+
+`응용 프로그램` 폴더에 두고 쓰려면 (로그인 시 자동 실행도 이쪽이 안정적입니다):
+
+```bash
+pkill -f MacOS/Moveable; ditto Moveable.app /Applications/Moveable.app && open /Applications/Moveable.app
+```
+
+옮긴 뒤 단축키가 안 먹으면 손쉬운 사용 목록에서 Moveable을 껐다 켜세요.
+
+배포용 zip은 `./build.sh --release`로 `dist/Moveable.zip`에 만들어집니다.
 
 ## 요구 사항
 
